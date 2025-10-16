@@ -6,38 +6,41 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 
 const API_KEY = process.env.TMDB_API_KEY;
 const proxies = [
-  "http://gO4X2pYXuO:hS17ers9lj@45.132.252.51:31332",
-  "http://LNmsxHNu3N:RYL4s6s6rZNE@103.82.103.177:58114",
-  "http://qfW1PBtHcK:wxlEFnybhf@193.168.224.95:50706",
+  "https://gO4X2pYXuO:hS17ers9lj@45.132.252.51:31332",
+  "https://LNmsxHNu3N:RYL4s6s6rZNE@103.82.103.177:58114",
+  "https://qfW1PBtHcK:wxlEFnybhf@193.168.224.95:50706",
 ];
 
 const partnerLinksPath = path.join(process.cwd(), "partner_links.json5");
-
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 5;
 
 const fetchWithProxy = async (url) => {
-  for (let i = 0; i < MAX_RETRIES; i++) {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     const proxy = proxies[Math.floor(Math.random() * proxies.length)];
     const agent = new HttpsProxyAgent(proxy);
+
     try {
+      console.log(`Попытка ${attempt} через прокси: ${proxy}`);
       const resp = await fetch(url, { agent });
 
       if (!resp.ok) {
-        console.warn(`Прокси ${proxy} вернул статус ${resp.status}. Попытка ${i + 1}`);
-        continue; // попробовать другой прокси
+        console.warn(`Прокси ${proxy} вернул статус ${resp.status}. Попытка ${attempt}`);
+        continue; // пробуем другой прокси
       }
 
       const text = await resp.text();
+
       try {
-        return JSON.parse(text);
-      } catch (e) {
-        console.warn(`Прокси ${proxy} вернул некорректный JSON. Попытка ${i + 1}`);
+        const data = JSON.parse(text);
+        return data;
+      } catch (jsonErr) {
+        console.warn(`Некорректный JSON через прокси ${proxy} (попытка ${attempt}):`, jsonErr.message);
         console.warn("Ответ (первые 200 символов):", text.slice(0, 200));
-        continue;
+        continue; // пробуем снова
       }
     } catch (err) {
-      console.warn(`Ошибка запроса через прокси ${proxy}: ${err.message}. Попытка ${i + 1}`);
-      continue;
+      console.warn(`Ошибка запроса через прокси ${proxy} (попытка ${attempt}): ${err.message}`);
+      continue; // пробуем следующий прокси
     }
   }
   throw new Error("Все прокси не сработали или API TMDB недоступен");
@@ -72,14 +75,14 @@ export default async function handler(req, res) {
       ? JSON5.parse(fs.readFileSync(partnerLinksPath, "utf8"))
       : { default: "https://e4sy.shop/3/rd.php?url=/p/HyZHfHe0HSr" };
 
-    const normalize = (it, type) => ({
-      id: `${type}_${it.id}`,
-      tmdb_id: it.id,
+    const normalize = (item, type) => ({
+      id: `${type}_${item.id}`,
+      tmdb_id: item.id,
       type,
-      title: it.title || it.name,
-      poster_path: it.poster_path,
-      overview: it.overview,
-      partnerLink: partnerLinks[`${type}_${it.id}`] || partnerLinks.default,
+      title: item.title || item.name,
+      poster_path: item.poster_path,
+      overview: item.overview,
+      partnerLink: partnerLinks[`${type}_${item.id}`] || partnerLinks.default,
     });
 
     const all = [
