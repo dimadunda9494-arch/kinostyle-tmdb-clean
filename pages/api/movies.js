@@ -16,6 +16,8 @@ const pickProxy = () => proxies[Math.floor(Math.random() * proxies.length)];
 const partnerLinksPath = path.join(process.cwd(), "partner_links.json5");
 
 export default async function handler(req, res) {
+  const { category } = req.query;  // Получаем категорию из запроса (если есть)
+  
   try {
     const cachePath = path.join(process.cwd(), "cache_movies.json");
     const now = Date.now();
@@ -36,9 +38,14 @@ export default async function handler(req, res) {
       return resp.json();
     };
 
-    const movies = await fetchWithProxy(
-      `https://api.themoviedb.org/3/movie/popular?api_key=${API_KEY}&language=ru-RU&page=1`
-    );
+    // Если категория не указана, получаем самые популярные фильмы
+    let url = `https://api.themoviedb.org/3/movie/popular?api_key=${API_KEY}&language=ru-RU&page=1`;
+    if (category && category !== "all") {
+      // Если категория указана, делаем запрос с фильтрацией по жанру
+      url = `https://api.themoviedb.org/3/discover/movie?api_key=${API_KEY}&language=ru-RU&page=1&with_genres=${category}`;
+    }
+
+    const movies = await fetchWithProxy(url);
     const tv = await fetchWithProxy(
       `https://api.themoviedb.org/3/tv/popular?api_key=${API_KEY}&language=ru-RU&page=1`
     );
