@@ -1,0 +1,11 @@
+{
+  // 🎬 Фильмы
+  "movie_315162": "https://e4sy.shop/3/rd.php?url=/p/HyZHfHe0HSr", // Чёрная Пантера 2
+  "movie_667538": "https://e4sy.shop/3/rd.php?url=/p/ExampleLink", // Человек-паук: Нет пути домой
+
+  // 📺 Сериалы
+  "tv_84958": "https://e4sy.shop/3/rd.php?url=/p/ExampleLink", // Локи
+  
+  // 🚀 Ссылка по умолчанию
+  "default": "https://e4sy.shop/3/rd.php?url=/p/HyZHfHe0HSr"
+}
