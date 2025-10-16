@@ -7,16 +7,44 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 const API_KEY = process.env.TMDB_API_KEY;
 const proxies = [
   "http://gO4X2pYXuO:hS17ers9lj@45.132.252.51:31332",
-  "http://LNmsxHNu3N:RYL4s6rZNE@103.82.103.177:58114",
+  "http://LNmsxHNu3N:RYL4s6s6rZNE@103.82.103.177:58114",
   "http://qfW1PBtHcK:wxlEFnybhf@193.168.224.95:50706",
 ];
 
-const pickProxy = () => proxies[Math.floor(Math.random() * proxies.length)];
-
 const partnerLinksPath = path.join(process.cwd(), "partner_links.json5");
 
+const MAX_RETRIES = 3;
+
+const fetchWithProxy = async (url) => {
+  for (let i = 0; i < MAX_RETRIES; i++) {
+    const proxy = proxies[Math.floor(Math.random() * proxies.length)];
+    const agent = new HttpsProxyAgent(proxy);
+    try {
+      const resp = await fetch(url, { agent });
+
+      if (!resp.ok) {
+        console.warn(`Прокси ${proxy} вернул статус ${resp.status}. Попытка ${i + 1}`);
+        continue; // попробовать другой прокси
+      }
+
+      const text = await resp.text();
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        console.warn(`Прокси ${proxy} вернул некорректный JSON. Попытка ${i + 1}`);
+        console.warn("Ответ (первые 200 символов):", text.slice(0, 200));
+        continue;
+      }
+    } catch (err) {
+      console.warn(`Ошибка запроса через прокси ${proxy}: ${err.message}. Попытка ${i + 1}`);
+      continue;
+    }
+  }
+  throw new Error("Все прокси не сработали или API TMDB недоступен");
+};
+
 export default async function handler(req, res) {
-  const { category } = req.query;  // Получаем категорию из запроса (если есть)
+  const { category } = req.query;
 
   try {
     const cachePath = path.join(process.cwd(), "cache_movies.json");
@@ -26,35 +54,12 @@ export default async function handler(req, res) {
       ? JSON.parse(fs.readFileSync(cachePath, "utf8"))
       : { updated: 0, movies: [] };
 
-    // обновляем каждые 24 часа
     if (now - cache.updated < 24 * 60 * 60 * 1000 && cache.movies.length > 0) {
       return res.status(200).json(cache.movies);
     }
 
-    const fetchWithProxy = async (url) => {
-      const proxy = pickProxy();
-      const agent = new HttpsProxyAgent(proxy);
-      const resp = await fetch(url, { agent });
-
-      if (!resp.ok) {
-        throw new Error(`TMDB API Error: ${resp.status} ${resp.statusText}`);
-      }
-
-      const text = await resp.text();
-
-      try {
-        return JSON.parse(text);
-      } catch (e) {
-        console.error("Ошибка парсинга JSON:", e);
-        console.error("Ответ сервера (первые 200 символов):", text.slice(0, 200));
-        throw new Error("Невозможно разобрать JSON TMDB");
-      }
-    };
-
-    // Если категория не указана, получаем самые популярные фильмы
     let url = `https://api.themoviedb.org/3/movie/popular?api_key=${API_KEY}&language=ru-RU&page=1`;
     if (category && category !== "all") {
-      // Если категория указана, делаем запрос с фильтрацией по жанру
       url = `https://api.themoviedb.org/3/discover/movie?api_key=${API_KEY}&language=ru-RU&page=1&with_genres=${category}`;
     }
 
@@ -82,7 +87,6 @@ export default async function handler(req, res) {
       ...tv.results.map((t) => normalize(t, "tv")),
     ];
 
-    // авто-добавление новых id
     let added = 0;
     all.forEach((item) => {
       if (!partnerLinks[item.id]) {
@@ -95,8 +99,8 @@ export default async function handler(req, res) {
       fs.writeFileSync(partnerLinksPath, JSON5.stringify(partnerLinks, null, 2));
     }
 
-    cache = { updated: now, movies: all };
-    fs.writeFileSync(cachePath, JSON.stringify(cache, null, 2));
+    const newCache = { updated: now, movies: all };
+    fs.writeFileSync(cachePath, JSON.stringify(newCache, null, 2));
 
     res.status(200).json(all);
   } catch (err) {
