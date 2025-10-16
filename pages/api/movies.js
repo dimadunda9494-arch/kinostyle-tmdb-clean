@@ -17,7 +17,7 @@ const partnerLinksPath = path.join(process.cwd(), "partner_links.json5");
 
 export default async function handler(req, res) {
   const { category } = req.query;  // Получаем категорию из запроса (если есть)
-  
+
   try {
     const cachePath = path.join(process.cwd(), "cache_movies.json");
     const now = Date.now();
@@ -35,7 +35,20 @@ export default async function handler(req, res) {
       const proxy = pickProxy();
       const agent = new HttpsProxyAgent(proxy);
       const resp = await fetch(url, { agent });
-      return resp.json();
+
+      if (!resp.ok) {
+        throw new Error(`TMDB API Error: ${resp.status} ${resp.statusText}`);
+      }
+
+      const text = await resp.text();
+
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        console.error("Ошибка парсинга JSON:", e);
+        console.error("Ответ сервера (первые 200 символов):", text.slice(0, 200));
+        throw new Error("Невозможно разобрать JSON TMDB");
+      }
     };
 
     // Если категория не указана, получаем самые популярные фильмы
